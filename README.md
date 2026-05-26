@@ -14,6 +14,7 @@ This repository currently contains the project foundation:
 - configurable Base Sepolia DEX swap ingestion worker
 - WebSocket realtime gateway backed by Redis Pub/Sub
 - realtime frontend dashboard consuming the gateway stream
+- BullMQ candle aggregation for server-side OHLC chart updates
 
 ## Local Setup
 
@@ -51,6 +52,16 @@ Supported pool protocols:
 - `uniswap-v3`
 
 The worker deduplicates events with Redis, persists normalized trades into PostgreSQL, and publishes live trade messages to the `dex:trades` Redis channel.
+
+## Candle Aggregation
+
+Phase 5 adds a BullMQ candle aggregation pipeline. Every persisted swap is queued on `candle-aggregation`, aggregated into `1m`, `5m`, and `15m` OHLC candles, stored in PostgreSQL, and published to the `dex:candles` Redis channel as `candle_update` events.
+
+Historical candles are available through:
+
+```txt
+GET /api/candles?pairAddress=0x...&interval=1m&limit=120
+```
 
 ## Realtime Gateway
 

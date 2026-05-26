@@ -1,4 +1,5 @@
 import type Redis from "ioredis";
+import type { Queue } from "bullmq";
 import type { Logger } from "pino";
 import type { Pool } from "pg";
 import {
@@ -12,8 +13,8 @@ import {
 } from "viem";
 import { baseSepolia as viemBaseSepolia } from "viem/chains";
 
-import { baseSepolia, redisChannels } from "@rdat/shared";
-import type { MonitoredPool } from "@rdat/types";
+import { baseSepolia, queueNames, redisChannels } from "@rdat/shared";
+import type { CandleAggregationJob, MonitoredPool, TradeEvent } from "@rdat/types";
 
 import { config } from "../config";
 import { uniswapV2PairAbi, uniswapV3PoolAbi } from "./abis";
@@ -41,7 +42,8 @@ export class IngestionWorker {
   constructor(
     private readonly db: Pool,
     private readonly redis: Redis,
-    private readonly logger: Logger
+    private readonly logger: Logger,
+    private readonly candleAggregationQueue: Queue<CandleAggregationJob> | null = null
   ) {}
 
   async start() {
@@ -174,6 +176,7 @@ export class IngestionWorker {
     }
 
     await publishTrade(this.redis, inserted);
+    await this.enqueueCandleAggregation(inserted);
     this.logger.info(
       {
         txHash: inserted.txHash,
@@ -221,6 +224,47 @@ export class IngestionWorker {
       })
     );
   }
+
+  private async enqueueCandleAggregation(trade: TradeEvent) {
+    if (!this.candleAggregationQueue) {
+      return;
+    }
+
+    const price = calculateTradePrice(trade.amountIn, trade.amountOut);
+    if (!price) {
+      this.logger.warn({ tradeId: trade.id, txHash: trade.txHash }, "Skipped candle aggregation without price");
+      return;
+    }
+
+    const volume = calculateCandleVolume(trade);
+    if (!volume) {
+      this.logger.warn({ tradeId: trade.id, txHash: trade.txHash }, "Skipped candle aggregation without volume");
+      return;
+    }
+
+    await this.candleAggregationQueue.add(
+      "aggregate-trade-candles",
+      {
+        tradeId: trade.id,
+        pairAddress: trade.pairAddress,
+        price,
+        volume,
+        timestamp: trade.timestamp
+      },
+      {
+        jobId: `${trade.id}-candles`
+      }
+    );
+
+    this.logger.debug(
+      {
+        queue: queueNames.candleAggregation,
+        tradeId: trade.id,
+        pairAddress: trade.pairAddress
+      },
+      "Queued candle aggregation"
+    );
+  }
 }
 
 function getSwapAbi(protocol: MonitoredPool["protocol"]): Abi {
@@ -234,4 +278,25 @@ function createIngestionClient() {
       ? webSocket(config.BASE_SEPOLIA_RPC_WS_URL)
       : http(config.BASE_SEPOLIA_RPC_HTTP_URL)
   });
+}
+
+function calculateTradePrice(amountIn: string, amountOut: string) {
+  const input = Number(amountIn);
+  const output = Number(amountOut);
+
+  if (!Number.isFinite(input) || !Number.isFinite(output) || input <= 0 || output <= 0) {
+    return null;
+  }
+
+  return (output / input).toString();
+}
+
+function calculateCandleVolume(trade: TradeEvent) {
+  const value = Number(trade.usdValue ?? trade.amountIn);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  return value.toString();
 }

@@ -16,7 +16,7 @@ import { useMemo } from "react";
 import { compactAddress, formatNumber, formatUsd, relativeTime, toNumber } from "../../lib/format";
 import { useDashboardStore, type GatewayStatus } from "../../lib/dashboard-store";
 import { useRealtimeGateway } from "./use-realtime-gateway";
-import type { TradeEvent } from "@rdat/types";
+import type { Candle, TradeEvent } from "@rdat/types";
 
 type TrendRow = {
   pairAddress: string;
@@ -34,12 +34,13 @@ export function Dashboard() {
   const gatewayStatus = useDashboardStore((state) => state.gatewayStatus);
   const lastEventAt = useDashboardStore((state) => state.lastEventAt);
   const trades = useDashboardStore((state) => state.trades);
+  const candles = useDashboardStore((state) => state.candles);
   const whaleAlerts = useDashboardStore((state) => state.whaleAlerts);
   const systemEvents = useDashboardStore((state) => state.systemEvents);
 
   const stats = useMemo(() => buildStats(trades), [trades]);
   const trends = useMemo(() => buildTrends(trades), [trades]);
-  const chartPoints = useMemo(() => buildChartPoints(trades), [trades]);
+  const chartPoints = useMemo(() => buildChartPoints(candles, trades), [candles, trades]);
 
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100">
@@ -67,7 +68,7 @@ export function Dashboard() {
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.8fr)]">
           <div className="grid gap-4">
             <MarketToolbar gatewayStatus={gatewayStatus} lastEventAt={lastEventAt} />
-            <MarketChart points={chartPoints} trades={trades} />
+            <MarketChart points={chartPoints} trades={trades} candles={candles} />
             <LiveTrades trades={trades} />
           </div>
 
@@ -109,9 +110,10 @@ function MarketToolbar({
   );
 }
 
-function MarketChart({ points, trades }: { points: number[]; trades: TradeEvent[] }) {
+function MarketChart({ points, trades, candles }: { points: number[]; trades: TradeEvent[]; candles: Candle[] }) {
   const path = buildSparklinePath(points, 760, 260);
   const latest = trades[0];
+  const latestCandle = candles.find((candle) => candle.interval === "1m");
   const latestRatio = latest ? toNumber(latest.amountOut) / Math.max(toNumber(latest.amountIn), 1e-9) : null;
 
   return (
@@ -121,13 +123,22 @@ function MarketChart({ points, trades }: { points: number[]; trades: TradeEvent[
           <CandlestickChart className="h-5 w-5 text-emerald-300" aria-hidden="true" />
           <div>
             <h2 className="text-base font-semibold">Market Chart</h2>
-            <p className="text-xs text-neutral-400">1m activity index</p>
+            <p className="text-xs text-neutral-400">1m server-side OHLC candles</p>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2 text-right text-xs">
-          <Ticker label="Last" value={latestRatio ? formatNumber(latestRatio, { maximumFractionDigits: 6 }) : "-"} />
+          <Ticker
+            label="Last"
+            value={
+              latestCandle
+                ? formatNumber(toNumber(latestCandle.close), { maximumFractionDigits: 6 })
+                : latestRatio
+                  ? formatNumber(latestRatio, { maximumFractionDigits: 6 })
+                  : "-"
+            }
+          />
           <Ticker label="Trades" value={formatNumber(trades.length)} />
-          <Ticker label="Pairs" value={formatNumber(new Set(trades.map((trade) => trade.pairAddress)).size)} />
+          <Ticker label="Candles" value={formatNumber(candles.filter((candle) => candle.interval === "1m").length)} />
         </div>
       </div>
 
@@ -443,7 +454,18 @@ function buildTrends(trades: TradeEvent[]): TrendRow[] {
     .slice(0, 6);
 }
 
-function buildChartPoints(trades: TradeEvent[]) {
+function buildChartPoints(candles: Candle[], trades: TradeEvent[]) {
+  const candlePoints = candles
+    .filter((candle) => candle.interval === "1m")
+    .slice(0, 32)
+    .reverse()
+    .map((candle) => toNumber(candle.close))
+    .filter((point) => Number.isFinite(point) && point > 0);
+
+  if (candlePoints.length >= 2) {
+    return candlePoints;
+  }
+
   if (trades.length === 0) {
     return chartFallback;
   }

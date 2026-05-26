@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 
-import type { RealtimeEvent, TradeEvent, WhaleAlert } from "@rdat/types";
+import type { Candle, RealtimeEvent, TradeEvent, WhaleAlert } from "@rdat/types";
 
 export type GatewayStatus = "connecting" | "online" | "offline" | "error";
 
@@ -15,6 +15,7 @@ type DashboardState = {
   gatewayStatus: GatewayStatus;
   lastEventAt: string | null;
   trades: TradeEvent[];
+  candles: Candle[];
   whaleAlerts: WhaleAlert[];
   systemEvents: SystemEvent[];
   setGatewayStatus: (status: GatewayStatus) => void;
@@ -23,6 +24,7 @@ type DashboardState = {
 };
 
 const maxTrades = 80;
+const maxCandles = 240;
 const maxSystemEvents = 20;
 const maxWhaleAlerts = 40;
 
@@ -30,6 +32,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   gatewayStatus: "connecting",
   lastEventAt: null,
   trades: [],
+  candles: [],
   whaleAlerts: [],
   systemEvents: [],
   setGatewayStatus: (gatewayStatus) => set({ gatewayStatus }),
@@ -48,6 +51,28 @@ export const useDashboardStore = create<DashboardState>((set) => ({
         return {
           lastEventAt: now,
           whaleAlerts: [event.payload, ...state.whaleAlerts].slice(0, maxWhaleAlerts)
+        };
+      }
+
+      if (event.type === "candle_update" && isCandle(event.payload)) {
+        const candleUpdate = event.payload;
+        const nextCandles = [
+          candleUpdate,
+          ...state.candles.filter(
+            (candle) =>
+              !(
+                candle.pairAddress === candleUpdate.pairAddress &&
+                candle.interval === candleUpdate.interval &&
+                candle.timestamp === candleUpdate.timestamp
+              )
+          )
+        ]
+          .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+          .slice(0, maxCandles);
+
+        return {
+          lastEventAt: now,
+          candles: nextCandles
         };
       }
 
@@ -73,6 +98,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       gatewayStatus: "connecting",
       lastEventAt: null,
       trades: [],
+      candles: [],
       whaleAlerts: [],
       systemEvents: []
     })
@@ -80,6 +106,20 @@ export const useDashboardStore = create<DashboardState>((set) => ({
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isCandle(value: unknown): value is Candle {
+  return (
+    isRecord(value) &&
+    typeof value.pairAddress === "string" &&
+    (value.interval === "1m" || value.interval === "5m" || value.interval === "15m") &&
+    typeof value.open === "string" &&
+    typeof value.high === "string" &&
+    typeof value.low === "string" &&
+    typeof value.close === "string" &&
+    typeof value.volume === "string" &&
+    typeof value.timestamp === "string"
+  );
 }
 
 function isTradeEvent(value: unknown): value is TradeEvent {

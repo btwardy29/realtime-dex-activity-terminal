@@ -5,6 +5,7 @@ import Redis from "ioredis";
 import pg from "pg";
 
 import { config } from "./config";
+import { registerCandleRoutes } from "./candles";
 import { registerHealthRoutes } from "./health";
 import { registerRealtimeGateway } from "./realtime/gateway";
 
@@ -34,6 +35,7 @@ await app.register(rateLimit, {
 });
 
 await registerHealthRoutes(app, { db, redis });
+await registerCandleRoutes(app, { db });
 await registerRealtimeGateway(app, {
   redisSubscriber,
   heartbeatIntervalMs: config.WS_HEARTBEAT_INTERVAL_MS,

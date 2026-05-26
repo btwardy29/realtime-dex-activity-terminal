@@ -41,6 +41,14 @@ export type Candle = {
   timestamp: string;
 };
 
+export type CandleAggregationJob = {
+  tradeId: string;
+  pairAddress: string;
+  price: string;
+  volume: string;
+  timestamp: string;
+};
+
 export type WhaleAlert = {
   id: string;
   tradeId: string;
