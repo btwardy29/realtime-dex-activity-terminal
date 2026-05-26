@@ -1,0 +1,52 @@
+import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
+import Fastify from "fastify";
+import Redis from "ioredis";
+import pg from "pg";
+
+import { config } from "./config";
+import { registerHealthRoutes } from "./health";
+
+const { Pool } = pg;
+
+const logger = {
+  level: config.NODE_ENV === "production" ? "info" : "debug"
+};
+
+const app = Fastify({ logger });
+const db = new Pool({ connectionString: config.DATABASE_URL, max: 5 });
+const redis = new Redis(config.REDIS_URL, {
+  maxRetriesPerRequest: 3,
+  enableReadyCheck: true
+});
+
+await app.register(cors, {
+  origin: true
+});
+
+await app.register(rateLimit, {
+  max: 120,
+  timeWindow: "1 minute"
+});
+
+await registerHealthRoutes(app, { db, redis });
+
+const shutdown = async () => {
+  app.log.info("Shutting down API");
+  await app.close();
+  await redis.quit();
+  await db.end();
+};
+
+process.on("SIGINT", () => {
+  void shutdown().then(() => process.exit(0));
+});
+
+process.on("SIGTERM", () => {
+  void shutdown().then(() => process.exit(0));
+});
+
+await app.listen({
+  host: config.API_HOST,
+  port: config.API_PORT
+});
