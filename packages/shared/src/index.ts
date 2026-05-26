@@ -6,6 +6,22 @@ export const redisChannels = {
   system: "dex:system"
 } as const;
 
+export const realtimeChannelNames = [
+  "trades",
+  "ticker",
+  "candles",
+  "whaleAlerts",
+  "system"
+] as const;
+
+export const realtimeChannelToRedisChannel = {
+  trades: redisChannels.trades,
+  ticker: redisChannels.ticker,
+  candles: redisChannels.candles,
+  whaleAlerts: redisChannels.whaleAlerts,
+  system: redisChannels.system
+} as const;
+
 export const queueNames = {
   candleAggregation: "candle-aggregation",
   trendingCalculation: "trending-calculation",
