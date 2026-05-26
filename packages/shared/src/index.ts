@@ -14,3 +14,13 @@ export const queueNames = {
 } as const;
 
 export const supportedCandleIntervals = ["1m", "5m", "15m"] as const;
+
+export const baseSepolia = {
+  chainId: 84532,
+  name: "Base Sepolia"
+} as const;
+
+export const redisKeyPrefixes = {
+  ingestionDedup: "dex:ingestion:dedup",
+  recentTrades: "dex:recent-trades"
+} as const;
