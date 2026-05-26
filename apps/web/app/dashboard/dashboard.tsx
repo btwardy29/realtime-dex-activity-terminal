@@ -75,7 +75,7 @@ export function Dashboard() {
           <aside className="grid gap-4">
             <MarketStats stats={stats} />
             <TrendingPairs trends={trends} />
-            <WhaleAlerts alerts={whaleAlerts} trades={trades} />
+            <WhaleAlerts alerts={whaleAlerts} />
             <SystemEvents events={systemEvents} />
           </aside>
         </section>
@@ -270,29 +270,26 @@ function TrendingPairs({ trends }: { trends: TrendRow[] }) {
   );
 }
 
-function WhaleAlerts({ alerts, trades }: { alerts: ReturnType<typeof useDashboardStore.getState>["whaleAlerts"]; trades: TradeEvent[] }) {
-  const syntheticAlerts = trades
-    .filter((trade) => toNumber(trade.usdValue) >= 25000)
-    .slice(0, 4)
-    .map((trade) => ({
-      id: `${trade.id}-local-whale`,
-      threshold: trade.usdValue ?? "25000",
-      createdAt: trade.timestamp,
-      tradeId: trade.id
-    }));
-  const visibleAlerts = alerts.length > 0 ? alerts : syntheticAlerts;
-
+function WhaleAlerts({ alerts }: { alerts: ReturnType<typeof useDashboardStore.getState>["whaleAlerts"] }) {
   return (
     <section className="rounded-md border border-neutral-800 bg-neutral-900">
-      <PanelHeader icon={Bell} title="Whale Alerts" value={`${visibleAlerts.length} active`} />
+      <PanelHeader icon={Bell} title="Whale Alerts" value={`${alerts.length} active`} />
       <div className="divide-y divide-neutral-800">
-        {visibleAlerts.length === 0 ? (
+        {alerts.length === 0 ? (
           <EmptyPanel label="No whale alerts" />
         ) : (
-          visibleAlerts.map((alert) => (
+          alerts.map((alert) => (
             <div key={alert.id} className="px-4 py-3">
-              <p className="text-sm font-medium text-amber-200">{formatUsd(toNumber(alert.threshold))}</p>
-              <p className="mt-1 text-xs text-neutral-500">{relativeTime(alert.createdAt)} ago</p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-amber-200">{formatUsd(toNumber(alert.usdValue))}</p>
+                  <p className="mt-1 truncate font-mono text-xs text-neutral-500">
+                    {compactAddress(alert.pairAddress)} / {compactAddress(alert.walletAddress)}
+                  </p>
+                </div>
+                <span className="shrink-0 text-xs text-neutral-500">{relativeTime(alert.createdAt)} ago</span>
+              </div>
+              <p className="mt-2 text-xs text-neutral-500">Threshold {formatUsd(toNumber(alert.threshold))}</p>
             </div>
           ))
         )}

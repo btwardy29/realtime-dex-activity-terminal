@@ -16,6 +16,7 @@
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/websocket": "^11.2.0",
     "@rdat/shared": "workspace:*",
+    "@rdat/types": "workspace:*",
     "dotenv": "^17.2.3",
     "fastify": "^5.6.2",
     "ioredis": "^5.8.2",

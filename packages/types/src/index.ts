@@ -53,6 +53,10 @@ export type WhaleAlert = {
   id: string;
   tradeId: string;
   threshold: string;
+  usdValue: string;
+  pairAddress: string;
+  walletAddress: string;
+  txHash: string;
   createdAt: string;
 };
 

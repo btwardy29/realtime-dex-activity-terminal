@@ -17,6 +17,9 @@ import { baseSepolia, queueNames, redisChannels } from "@rdat/shared";
 import type { CandleAggregationJob, MonitoredPool, TradeEvent } from "@rdat/types";
 
 import { config } from "../config";
+import { detectWhaleAlert } from "../alerts/detector";
+import { publishWhaleAlert } from "../alerts/publisher";
+import { ensureWhaleAlertSchema, insertWhaleAlert } from "../alerts/repository";
 import { uniswapV2PairAbi, uniswapV3PoolAbi } from "./abis";
 import { acquireEventLock } from "./dedup";
 import { normalizeV2Swap, normalizeV3Swap } from "./normalizer";
@@ -48,6 +51,7 @@ export class IngestionWorker {
 
   async start() {
     await ensureIngestionSchema(this.db);
+    await ensureWhaleAlertSchema(this.db);
 
     if (!config.INGESTION_ENABLED) {
       this.logger.info("Blockchain ingestion disabled");
@@ -177,6 +181,7 @@ export class IngestionWorker {
 
     await publishTrade(this.redis, inserted);
     await this.enqueueCandleAggregation(inserted);
+    await this.handleWhaleAlert(inserted);
     this.logger.info(
       {
         txHash: inserted.txHash,
@@ -263,6 +268,29 @@ export class IngestionWorker {
         pairAddress: trade.pairAddress
       },
       "Queued candle aggregation"
+    );
+  }
+
+  private async handleWhaleAlert(trade: TradeEvent) {
+    const detection = detectWhaleAlert(trade, config.WHALE_ALERT_THRESHOLD_USD);
+    if (!detection) {
+      return;
+    }
+
+    const alert = await insertWhaleAlert(this.db, trade.id, detection.threshold);
+    if (!alert) {
+      return;
+    }
+
+    await publishWhaleAlert(this.redis, alert);
+    this.logger.info(
+      {
+        tradeId: trade.id,
+        txHash: trade.txHash,
+        usdValue: alert.usdValue,
+        threshold: alert.threshold
+      },
+      "Published whale alert"
     );
   }
 }

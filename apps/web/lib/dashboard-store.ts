@@ -143,6 +143,10 @@ function isWhaleAlert(value: unknown): value is WhaleAlert {
     typeof value.id === "string" &&
     typeof value.tradeId === "string" &&
     typeof value.threshold === "string" &&
+    typeof value.usdValue === "string" &&
+    typeof value.pairAddress === "string" &&
+    typeof value.walletAddress === "string" &&
+    typeof value.txHash === "string" &&
     typeof value.createdAt === "string"
   );
 }

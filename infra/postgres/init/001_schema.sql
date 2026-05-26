@@ -59,3 +59,4 @@ CREATE INDEX IF NOT EXISTS trades_wallet_timestamp_idx ON trades (wallet_address
 CREATE INDEX IF NOT EXISTS trades_block_number_idx ON trades (block_number DESC);
 CREATE INDEX IF NOT EXISTS candles_pair_interval_timestamp_idx ON candles (pair_address, interval, timestamp DESC);
 CREATE INDEX IF NOT EXISTS whale_alerts_created_at_idx ON whale_alerts (created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS whale_alerts_trade_id_idx ON whale_alerts (trade_id);
