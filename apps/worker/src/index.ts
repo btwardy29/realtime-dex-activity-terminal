@@ -6,6 +6,7 @@ import pino from "pino";
 import { queueNames } from "@rdat/shared";
 
 import { config } from "./config";
+import { IngestionWorker } from "./ingestion/worker";
 
 const { Pool } = pg;
 
@@ -17,11 +18,12 @@ const db = new Pool({ connectionString: config.DATABASE_URL, max: 3 });
 const redis = new Redis(config.REDIS_URL, {
   maxRetriesPerRequest: null
 });
+const queueConnection = buildQueueConnection(config.REDIS_URL);
 
 const queues = Object.values(queueNames).map(
   (name) =>
     new Queue(name, {
-      connection: redis,
+      connection: queueConnection,
       defaultJobOptions: {
         attempts: 3,
         backoff: {
@@ -33,20 +35,25 @@ const queues = Object.values(queueNames).map(
       }
     })
 );
+const ingestionWorker = new IngestionWorker(db, redis, logger);
 
 await db.query("SELECT 1");
 await redis.ping();
+await ingestionWorker.start();
 
 logger.info(
   {
     queueCount: queues.length,
-    workerConcurrency: config.WORKER_CONCURRENCY
+    workerConcurrency: config.WORKER_CONCURRENCY,
+    ingestionEnabled: config.INGESTION_ENABLED,
+    monitoredPools: config.MONITORED_POOLS.length
   },
   "Worker bootstrap completed"
 );
 
 const shutdown = async () => {
   logger.info("Shutting down worker");
+  await ingestionWorker.stop();
   await Promise.all(queues.map((queue) => queue.close()));
   await redis.quit();
   await db.end();
@@ -59,3 +66,32 @@ process.on("SIGINT", () => {
 process.on("SIGTERM", () => {
   void shutdown().then(() => process.exit(0));
 });
+
+function buildQueueConnection(redisUrl: string) {
+  const url = new URL(redisUrl);
+  const connection: {
+    host: string;
+    port: number;
+    username?: string;
+    password?: string;
+    db?: number;
+  } = {
+    host: url.hostname,
+    port: Number(url.port || 6379)
+  };
+
+  if (url.username) {
+    connection.username = decodeURIComponent(url.username);
+  }
+
+  if (url.password) {
+    connection.password = decodeURIComponent(url.password);
+  }
+
+  const db = url.pathname.replace("/", "");
+  if (db) {
+    connection.db = Number(db);
+  }
+
+  return connection;
+}

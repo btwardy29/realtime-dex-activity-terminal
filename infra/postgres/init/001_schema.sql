@@ -17,6 +17,9 @@ CREATE TABLE IF NOT EXISTS watchlists (
 CREATE TABLE IF NOT EXISTS trades (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   tx_hash TEXT NOT NULL,
+  log_index INTEGER NOT NULL DEFAULT 0,
+  chain_id INTEGER NOT NULL DEFAULT 84532,
+  protocol TEXT NOT NULL DEFAULT 'unknown',
   pair_address TEXT NOT NULL,
   token_in TEXT NOT NULL,
   token_out TEXT NOT NULL,
@@ -27,7 +30,7 @@ CREATE TABLE IF NOT EXISTS trades (
   block_number BIGINT NOT NULL,
   timestamp TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (tx_hash, pair_address)
+  UNIQUE (tx_hash, log_index)
 );
 
 CREATE TABLE IF NOT EXISTS candles (
@@ -53,5 +56,6 @@ CREATE TABLE IF NOT EXISTS whale_alerts (
 
 CREATE INDEX IF NOT EXISTS trades_pair_timestamp_idx ON trades (pair_address, timestamp DESC);
 CREATE INDEX IF NOT EXISTS trades_wallet_timestamp_idx ON trades (wallet_address, timestamp DESC);
+CREATE INDEX IF NOT EXISTS trades_block_number_idx ON trades (block_number DESC);
 CREATE INDEX IF NOT EXISTS candles_pair_interval_timestamp_idx ON candles (pair_address, interval, timestamp DESC);
 CREATE INDEX IF NOT EXISTS whale_alerts_created_at_idx ON whale_alerts (created_at DESC);

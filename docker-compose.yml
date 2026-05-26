@@ -62,6 +62,12 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-rdat}:${POSTGRES_PASSWORD:-rdat_dev_password}@postgres:5432/${POSTGRES_DB:-rdat}
       REDIS_URL: redis://redis:6379
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      INGESTION_ENABLED: ${INGESTION_ENABLED:-false}
+      BASE_SEPOLIA_RPC_HTTP_URL: ${BASE_SEPOLIA_RPC_HTTP_URL:-https://sepolia.base.org}
+      BASE_SEPOLIA_RPC_WS_URL: ${BASE_SEPOLIA_RPC_WS_URL:-}
+      INGESTION_POLLING_INTERVAL_MS: ${INGESTION_POLLING_INTERVAL_MS:-2000}
+      INGESTION_DEDUP_TTL_SECONDS: ${INGESTION_DEDUP_TTL_SECONDS:-86400}
+      MONITORED_POOLS: ${MONITORED_POOLS:-[]}
     depends_on:
       postgres:
         condition: service_healthy
