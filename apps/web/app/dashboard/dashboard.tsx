@@ -5,18 +5,22 @@ import {
   Bell,
   CandlestickChart,
   CircleDot,
+  LogOut,
+  Plus,
   Radio,
   Search,
   ShieldCheck,
+  Trash2,
   TrendingUp,
+  Wallet,
   Waves
 } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { compactAddress, formatNumber, formatUsd, relativeTime, toNumber } from "../../lib/format";
 import { useDashboardStore, type GatewayStatus } from "../../lib/dashboard-store";
 import { useRealtimeGateway } from "./use-realtime-gateway";
-import type { Candle, TradeEvent } from "@rdat/types";
+import type { AuthSession, Candle, TradeEvent, WatchlistItem } from "@rdat/types";
 
 type TrendRow = {
   pairAddress: string;
@@ -26,7 +30,18 @@ type TrendRow = {
   velocity: number;
 };
 
+type EthereumProvider = {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+};
+
+declare global {
+  interface Window {
+    ethereum?: EthereumProvider;
+  }
+}
+
 const chartFallback = [42, 46, 44, 51, 49, 57, 55, 62, 58, 66, 64, 71, 69, 76, 73, 79];
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export function Dashboard() {
   useRealtimeGateway();
@@ -73,6 +88,7 @@ export function Dashboard() {
           </div>
 
           <aside className="grid gap-4">
+            <WalletPanel />
             <MarketStats stats={stats} />
             <TrendingPairs trends={trends} />
             <WhaleAlerts alerts={whaleAlerts} />
@@ -81,6 +97,226 @@ export function Dashboard() {
         </section>
       </div>
     </main>
+  );
+}
+
+function WalletPanel() {
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [pairAddress, setPairAddress] = useState("");
+  const [status, setStatus] = useState("Disconnected");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void loadSession();
+  }, []);
+
+  const loadSession = async () => {
+    const response = await fetch(`${apiUrl}/api/auth/session`, {
+      credentials: "include"
+    });
+
+    if (!response.ok) {
+      setSession(null);
+      setWatchlist([]);
+      return;
+    }
+
+    const payload = (await response.json()) as { session: AuthSession };
+    setSession(payload.session);
+    await loadWatchlist();
+  };
+
+  const loadWatchlist = async () => {
+    const response = await fetch(`${apiUrl}/api/watchlist`, {
+      credentials: "include"
+    });
+
+    if (!response.ok) {
+      setWatchlist([]);
+      return;
+    }
+
+    const payload = (await response.json()) as { items: WatchlistItem[] };
+    setWatchlist(payload.items);
+  };
+
+  const connect = async () => {
+    const provider = getEthereumProvider();
+    if (!provider) {
+      setStatus("Wallet unavailable");
+      return;
+    }
+
+    setBusy(true);
+    setStatus("Awaiting signature");
+
+    try {
+      const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[];
+      const walletAddress = accounts[0];
+      if (!walletAddress) {
+        throw new Error("No wallet account returned");
+      }
+
+      const nonceResponse = await fetch(`${apiUrl}/api/auth/nonce`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ walletAddress })
+      });
+      const noncePayload = (await nonceResponse.json()) as { message: string };
+      const signature = (await provider.request({
+        method: "personal_sign",
+        params: [noncePayload.message, walletAddress]
+      })) as string;
+
+      const verifyResponse = await fetch(`${apiUrl}/api/auth/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          message: noncePayload.message,
+          signature
+        })
+      });
+
+      if (!verifyResponse.ok) {
+        throw new Error("Signature rejected");
+      }
+
+      const payload = (await verifyResponse.json()) as { session: AuthSession };
+      setSession(payload.session);
+      setStatus("Connected");
+      await loadWatchlist();
+    } catch {
+      setStatus("Connection failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const logout = async () => {
+    await fetch(`${apiUrl}/api/auth/logout`, {
+      method: "POST",
+      credentials: "include"
+    });
+    setSession(null);
+    setWatchlist([]);
+    setStatus("Disconnected");
+  };
+
+  const addPair = async () => {
+    const pair = pairAddress.trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(pair)) {
+      setStatus("Invalid pair");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const response = await fetch(`${apiUrl}/api/watchlist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ pairAddress: pair })
+      });
+
+      if (!response.ok) {
+        throw new Error("Watchlist add failed");
+      }
+
+      setPairAddress("");
+      setStatus("Watchlist updated");
+      await loadWatchlist();
+    } catch {
+      setStatus("Watchlist failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removePair = async (id: string) => {
+    await fetch(`${apiUrl}/api/watchlist/${id}`, {
+      method: "DELETE",
+      credentials: "include"
+    });
+    await loadWatchlist();
+  };
+
+  return (
+    <section className="rounded-md border border-neutral-800 bg-neutral-900">
+      <PanelHeader icon={Wallet} title="Wallet" value={session ? "connected" : "guest"} />
+      <div className="space-y-3 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate font-mono text-xs text-neutral-300">
+              {session ? compactAddress(session.walletAddress) : "No wallet session"}
+            </p>
+            <p className="mt-1 text-xs text-neutral-500">{status}</p>
+          </div>
+          {session ? (
+            <button
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-neutral-700 bg-neutral-950 text-neutral-300"
+              onClick={() => void logout()}
+              type="button"
+              title="Disconnect"
+            >
+              <LogOut className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : (
+            <button
+              className="rounded-md border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-200 disabled:opacity-50"
+              disabled={busy}
+              onClick={() => void connect()}
+              type="button"
+            >
+              Connect
+            </button>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            className="min-w-0 flex-1 rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2 font-mono text-xs text-neutral-200 outline-none focus:border-cyan-400/60"
+            disabled={!session || busy}
+            onChange={(event) => setPairAddress(event.target.value)}
+            placeholder="0x pair address"
+            value={pairAddress}
+          />
+          <button
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-neutral-700 bg-neutral-950 text-neutral-300 disabled:opacity-50"
+            disabled={!session || busy}
+            onClick={() => void addPair()}
+            type="button"
+            title="Add pair"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="divide-y divide-neutral-800 rounded-md border border-neutral-800">
+          {watchlist.length === 0 ? (
+            <div className="px-3 py-4 text-center text-xs text-neutral-500">No watched pairs</div>
+          ) : (
+            watchlist.slice(0, 6).map((item) => (
+              <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                <span className="min-w-0 truncate font-mono text-xs text-neutral-300">
+                  {compactAddress(item.pairAddress)}
+                </span>
+                <button
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-neutral-500 hover:text-rose-300"
+                  onClick={() => void removePair(item.id)}
+                  type="button"
+                  title="Remove pair"
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -488,4 +724,12 @@ function buildSparklinePath(points: number[], width: number, height: number) {
       return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
     })
     .join(" ");
+}
+
+function getEthereumProvider() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.ethereum ?? null;
 }

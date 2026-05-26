@@ -5,6 +5,7 @@ import Redis from "ioredis";
 import pg from "pg";
 
 import { config } from "./config";
+import { registerAuthRoutes } from "./auth/routes";
 import { registerCandleRoutes } from "./candles";
 import { registerHealthRoutes } from "./health";
 import { registerRealtimeGateway } from "./realtime/gateway";
@@ -27,7 +28,8 @@ const redisSubscriber = redis.duplicate({
 });
 
 await app.register(cors, {
-  origin: true
+  origin: true,
+  credentials: true
 });
 
 await app.register(rateLimit, {
@@ -36,6 +38,7 @@ await app.register(rateLimit, {
 });
 
 await registerHealthRoutes(app, { db, redis });
+await registerAuthRoutes(app, { db, redis });
 await registerCandleRoutes(app, { db });
 await registerWhaleAlertRoutes(app, { db, redis });
 await registerRealtimeGateway(app, {
