@@ -71,6 +71,7 @@ const configSchema = z.object({
     .transform((value) => value || undefined),
   INGESTION_POLLING_INTERVAL_MS: z.coerce.number().int().min(500).max(60_000).default(2000),
   INGESTION_DEDUP_TTL_SECONDS: z.coerce.number().int().min(60).max(604_800).default(86_400),
+  WHALE_ALERT_THRESHOLD_USD: z.coerce.number().positive().default(25_000),
   MONITORED_POOLS: monitoredPoolsSchema
 });
 

@@ -15,6 +15,7 @@ This repository currently contains the project foundation:
 - WebSocket realtime gateway backed by Redis Pub/Sub
 - realtime frontend dashboard consuming the gateway stream
 - BullMQ candle aggregation for server-side OHLC chart updates
+- persisted whale alerts with WebSocket and SSE delivery
 
 ## Local Setup
 
@@ -61,6 +62,21 @@ Historical candles are available through:
 
 ```txt
 GET /api/candles?pairAddress=0x...&interval=1m&limit=120
+```
+
+## Whale Alerts
+
+Phase 6 adds persisted whale alert detection for trades with a USD value at or above `WHALE_ALERT_THRESHOLD_USD`:
+
+```bash
+WHALE_ALERT_THRESHOLD_USD=25000
+```
+
+Detected alerts are stored in PostgreSQL, published to `dex:whale-alerts`, forwarded through the WebSocket `whaleAlerts` channel, and exposed through:
+
+```txt
+GET /api/whale-alerts?limit=50
+GET /api/whale-alerts/stream
 ```
 
 ## Realtime Gateway

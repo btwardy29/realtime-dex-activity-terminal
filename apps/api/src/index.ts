@@ -8,6 +8,7 @@ import { config } from "./config";
 import { registerCandleRoutes } from "./candles";
 import { registerHealthRoutes } from "./health";
 import { registerRealtimeGateway } from "./realtime/gateway";
+import { registerWhaleAlertRoutes } from "./whale-alerts";
 
 const { Pool } = pg;
 
@@ -36,6 +37,7 @@ await app.register(rateLimit, {
 
 await registerHealthRoutes(app, { db, redis });
 await registerCandleRoutes(app, { db });
+await registerWhaleAlertRoutes(app, { db, redis });
 await registerRealtimeGateway(app, {
   redisSubscriber,
   heartbeatIntervalMs: config.WS_HEARTBEAT_INTERVAL_MS,
