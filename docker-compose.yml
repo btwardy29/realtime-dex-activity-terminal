@@ -1,9 +1,16 @@
 name: realtime-dex-activity-terminal
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-rdat}
       POSTGRES_USER: ${POSTGRES_USER:-rdat}
@@ -22,7 +29,17 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    logging: *default-logging
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--maxmemory",
+        "${REDIS_MAXMEMORY:-256mb}",
+        "--maxmemory-policy",
+        "noeviction"
+      ]
     ports:
       - "6379:6379"
     volumes:
@@ -38,6 +55,7 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       API_HOST: 0.0.0.0
@@ -51,6 +69,12 @@ services:
       REDIS_URL: redis://redis:6379
     ports:
       - "4000:4000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4000/health | grep '\"ok\":true'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,6 +86,7 @@ services:
       context: .
       dockerfile: apps/worker/Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       DATABASE_URL: postgres://${POSTGRES_USER:-rdat}:${POSTGRES_PASSWORD:-rdat_dev_password}@postgres:5432/${POSTGRES_DB:-rdat}
@@ -73,6 +98,8 @@ services:
       INGESTION_POLLING_INTERVAL_MS: ${INGESTION_POLLING_INTERVAL_MS:-2000}
       INGESTION_DEDUP_TTL_SECONDS: ${INGESTION_DEDUP_TTL_SECONDS:-86400}
       WHALE_ALERT_THRESHOLD_USD: ${WHALE_ALERT_THRESHOLD_USD:-25000}
+      DATA_RETENTION_DAYS: ${DATA_RETENTION_DAYS:-30}
+      CLEANUP_INTERVAL_MS: ${CLEANUP_INTERVAL_MS:-3600000}
       MONITORED_POOLS: ${MONITORED_POOLS:-[]}
     depends_on:
       postgres:
@@ -84,15 +111,38 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     restart: unless-stopped
+    logging: *default-logging
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     ports:
       - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       api:
         condition: service_started
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
 
 volumes:
   postgres-data:

@@ -1,5 +1,7 @@
+import { getApiUrl } from "./api-url";
+
 export function getRealtimeWebSocketUrl() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+  const apiUrl = getApiUrl();
   const url = new URL(apiUrl);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.pathname = "/ws";
