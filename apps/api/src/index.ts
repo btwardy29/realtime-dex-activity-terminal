@@ -6,6 +6,7 @@ import pg from "pg";
 
 import { config } from "./config";
 import { registerHealthRoutes } from "./health";
+import { registerRealtimeGateway } from "./realtime/gateway";
 
 const { Pool } = pg;
 
@@ -19,6 +20,9 @@ const redis = new Redis(config.REDIS_URL, {
   maxRetriesPerRequest: 3,
   enableReadyCheck: true
 });
+const redisSubscriber = redis.duplicate({
+  maxRetriesPerRequest: null
+});
 
 await app.register(cors, {
   origin: true
@@ -30,10 +34,16 @@ await app.register(rateLimit, {
 });
 
 await registerHealthRoutes(app, { db, redis });
+await registerRealtimeGateway(app, {
+  redisSubscriber,
+  heartbeatIntervalMs: config.WS_HEARTBEAT_INTERVAL_MS,
+  maxClients: config.WS_MAX_CLIENTS
+});
 
 const shutdown = async () => {
   app.log.info("Shutting down API");
   await app.close();
+  await redisSubscriber.quit();
   await redis.quit();
   await db.end();
 };

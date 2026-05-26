@@ -47,3 +47,25 @@ export type WhaleAlert = {
   threshold: string;
   createdAt: string;
 };
+
+export type RealtimeEventType = "trade" | "ticker_update" | "candle_update" | "whale_alert" | "system";
+
+export type RealtimeEvent<TPayload = unknown> = {
+  type: RealtimeEventType;
+  payload: TPayload;
+};
+
+export type RealtimeChannel = "trades" | "ticker" | "candles" | "whaleAlerts" | "system";
+
+export type WebSocketClientMessage =
+  | {
+      type: "subscribe";
+      channels: RealtimeChannel[];
+    }
+  | {
+      type: "unsubscribe";
+      channels: RealtimeChannel[];
+    }
+  | {
+      type: "ping";
+    };
