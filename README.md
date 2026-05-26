@@ -16,6 +16,7 @@ This repository currently contains the project foundation:
 - realtime frontend dashboard consuming the gateway stream
 - BullMQ candle aggregation for server-side OHLC chart updates
 - persisted whale alerts with WebSocket and SSE delivery
+- SIWE-style wallet sessions and authenticated watchlists
 
 ## Local Setup
 
@@ -77,6 +78,28 @@ Detected alerts are stored in PostgreSQL, published to `dex:whale-alerts`, forwa
 ```txt
 GET /api/whale-alerts?limit=50
 GET /api/whale-alerts/stream
+```
+
+## Wallet Auth and Watchlists
+
+Phase 7 adds wallet sessions backed by nonce validation, EVM signature verification, and an HTTP-only session cookie:
+
+```bash
+AUTH_JWT_SECRET=development-only-secret-change-before-production
+AUTH_SESSION_TTL_SECONDS=604800
+AUTH_NONCE_TTL_SECONDS=300
+```
+
+Auth and watchlist endpoints:
+
+```txt
+POST /api/auth/nonce
+POST /api/auth/verify
+GET /api/auth/session
+POST /api/auth/logout
+GET /api/watchlist
+POST /api/watchlist
+DELETE /api/watchlist/:id
 ```
 
 ## Realtime Gateway

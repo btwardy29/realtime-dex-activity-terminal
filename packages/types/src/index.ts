@@ -60,6 +60,19 @@ export type WhaleAlert = {
   createdAt: string;
 };
 
+export type AuthSession = {
+  userId: string;
+  walletAddress: string;
+  expiresAt: string;
+};
+
+export type WatchlistItem = {
+  id: string;
+  userId: string;
+  pairAddress: string;
+  createdAt: string;
+};
+
 export type RealtimeEventType = "trade" | "ticker_update" | "candle_update" | "whale_alert" | "system";
 
 export type RealtimeEvent<TPayload = unknown> = {
