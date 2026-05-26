@@ -13,6 +13,7 @@ This repository currently contains the project foundation:
 - worker bootstrap that verifies Postgres and Redis connectivity
 - configurable Base Sepolia DEX swap ingestion worker
 - WebSocket realtime gateway backed by Redis Pub/Sub
+- realtime frontend dashboard consuming the gateway stream
 
 ## Local Setup
 
@@ -73,3 +74,14 @@ The gateway subscribes to Redis Pub/Sub channels and forwards matching messages 
 ```txt
 GET /api/realtime/health
 ```
+
+## Frontend Dashboard
+
+Phase 4 replaces the starter screen with a realtime terminal dashboard:
+
+- live WebSocket connection state
+- activity chart surface
+- live trades feed
+- trending pairs
+- whale alerts
+- session market statistics
