@@ -8,6 +8,7 @@ import type { CandleAggregationJob } from "@rdat/types";
 
 import { config } from "./config";
 import { createCandleAggregationWorker } from "./candles/processor";
+import { runDataRetention } from "./cleanup/retention";
 import { IngestionWorker } from "./ingestion/worker";
 
 const { Pool } = pg;
@@ -60,23 +61,44 @@ const candleWorker = createCandleAggregationWorker({
   concurrency: config.WORKER_CONCURRENCY,
   logger
 });
+const cleanupTimer = setInterval(() => {
+  void runDataRetention({
+    db,
+    redis,
+    retentionDays: config.DATA_RETENTION_DAYS,
+    logger
+  }).catch((error: unknown) => {
+    logger.error({ error }, "Data retention cleanup failed");
+  });
+}, config.CLEANUP_INTERVAL_MS);
+
+cleanupTimer.unref();
 
 await db.query("SELECT 1");
 await redis.ping();
 await ingestionWorker.start();
+await runDataRetention({
+  db,
+  redis,
+  retentionDays: config.DATA_RETENTION_DAYS,
+  logger
+});
 
 logger.info(
   {
     queueCount: queues.length,
     workerConcurrency: config.WORKER_CONCURRENCY,
     ingestionEnabled: config.INGESTION_ENABLED,
-    monitoredPools: config.MONITORED_POOLS.length
+    monitoredPools: config.MONITORED_POOLS.length,
+    dataRetentionDays: config.DATA_RETENTION_DAYS,
+    cleanupIntervalMs: config.CLEANUP_INTERVAL_MS
   },
   "Worker bootstrap completed"
 );
 
 const shutdown = async () => {
   logger.info("Shutting down worker");
+  clearInterval(cleanupTimer);
   await ingestionWorker.stop();
   await candleWorker.close();
   await Promise.all(queues.map((queue) => queue.close()));

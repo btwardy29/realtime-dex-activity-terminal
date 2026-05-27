@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { compactAddress, formatNumber, formatUsd, relativeTime, toNumber } from "../../lib/format";
 import { useDashboardStore, type GatewayStatus } from "../../lib/dashboard-store";
+import { getApiUrl } from "../../lib/api-url";
 import { useRealtimeGateway } from "./use-realtime-gateway";
 import type { AuthSession, Candle, TradeEvent, WatchlistItem } from "@rdat/types";
 
@@ -41,7 +42,6 @@ declare global {
 }
 
 const chartFallback = [42, 46, 44, 51, 49, 57, 55, 62, 58, 66, 64, 71, 69, 76, 73, 79];
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export function Dashboard() {
   useRealtimeGateway();
@@ -101,6 +101,7 @@ export function Dashboard() {
 }
 
 function WalletPanel() {
+  const apiUrl = getApiUrl();
   const [session, setSession] = useState<AuthSession | null>(null);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [pairAddress, setPairAddress] = useState("");

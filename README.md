@@ -26,6 +26,12 @@ cp .env.example .env
 docker compose up --build
 ```
 
+The public local entrypoint is:
+
+```txt
+http://localhost:8080
+```
+
 Useful commands:
 
 ```bash
@@ -101,6 +107,28 @@ GET /api/watchlist
 POST /api/watchlist
 DELETE /api/watchlist/:id
 ```
+
+## Deployment and Retention
+
+Phase 8 adds an Nginx reverse proxy for a single public entrypoint, bounded Docker log files, Redis memory settings with a BullMQ-safe `noeviction` policy, service healthchecks, and worker-side retention cleanup.
+
+Key deployment settings:
+
+```bash
+HTTP_PORT=8080
+NEXT_PUBLIC_API_URL=http://localhost:8080
+REDIS_MAXMEMORY=256mb
+DATA_RETENTION_DAYS=30
+CLEANUP_INTERVAL_MS=3600000
+```
+
+For a VPS deployment, set `NEXT_PUBLIC_API_URL` to the public origin before building the web image, for example `https://dex.example.com`, then run:
+
+```bash
+docker compose up -d --build
+```
+
+Nginx routes `/`, `/api/*`, `/ws`, `/health`, and `/ready` to the correct internal services.
 
 ## Realtime Gateway
 
